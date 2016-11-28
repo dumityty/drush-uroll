@@ -1,13 +1,13 @@
-<?php 
+<?php
 /**
  * @file
  *   Update Rollback Drush Drupal Testing
  *   Author: Dan Shumaker
  *   Date: 9/17/2013
  *
- * Installation: Put this file in your ~/.drush   directory
+ * Installation: Put this file in your ~/.drush directory
  *
- * Tested in drush 5 and 6.
+ * Tested in drush 5, 6 and 7.
  */
 
 /*
@@ -19,18 +19,19 @@ function uroll_drush_command()  {
   $items['uroll'] = array(
     'description' => "Rollback update function version recorded by drupal system.  ",
     'options' => array(
-      'module' => 'module to change the version on',
-      'version' => 'Version to set to roll back to',
+      'module' => 'Module to change the version on.',
+      'version' => 'Version to set to roll back to.',
+      'dry-run' => 'Only show current version of the module.'
     ),
     'examples' => array(
       'drush uroll --module=becker_general --version=12' => 'Rollback the system table so that drupal think it has not run the update for becker_general version 12',
     ),
-  'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL, // No bootstrap at all.
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL, // No bootstrap at all.
   );
 
   return $items;
- 
-} 
+
+}
 
 /*
  * Implementation of hook_drush_help()
@@ -44,7 +45,7 @@ function uroll_drush_help($section) {
     // commands in `drush help`.  If a title is not defined,
     // the default is "All commands in ___", with the
     // specific name of the commandfile (e.g. sandwich).
-    // Command files with less than four commands will 
+    // Command files with less than four commands will
     // be placed in the "Other commands" section, _unless_
     // they define a title.  It is therefore preferable
     // to not define a title unless the file defines a lot
@@ -74,33 +75,51 @@ function drush_uroll_validate() {
 
 /**
  * Implementation of drush_hook()
+ *
+ * @todo
+ * - check if module exists first to prevent db update errors
  */
 function drush_uroll() {
     $module = drush_get_option('module', 1);
     $version = drush_get_option('version', 1);
+    $dry_run = drush_get_option('dry-run', FALSE);
+
     $context = drush_get_context();
     //dlm($context);
     //$url = $context['site-aliases']['@self']['uri'];
+
     if ( !strstr($context['DRUSH_URI'], 'http') ) {
       $url  = $protocol . "://" . $context['DRUSH_URI'] . '/';
     } else {
       $url = $context['DRUSH_URI'];
     }
-    $before = db_select('system', 'sys')
+
+    // Get current version of the module
+    $status = db_select('system', 'sys')
       ->condition('name', trim($module))
       ->fields('sys',array('name', 'schema_version'))
       ->execute()
       ->fetchAssoc();
-     print_r($before);
-    $res = db_update('system')
-      ->fields(array('schema_version' => $version))
-      ->condition('name', $module)
-      ->execute();
-    $after = db_select('system', 'sys')
-      ->condition('name', $module)
-      ->fields('sys',array('name', 'schema_version'))
-      ->execute()
-      ->fetchAssoc();
-     print_r($after);
+    // drush_print_r($status);
+
+    drush_log('Current schema', 'ok');
+    drush_log($status['name'] . ' - ' . $status['schema_version'], 'ok');
+
+    if (!$dry_run) {
+      $res = db_update('system')
+        ->fields(array('schema_version' => $version))
+        ->condition('name', $module)
+        ->execute();
+
+      $status = db_select('system', 'sys')
+        ->condition('name', $module)
+        ->fields('sys',array('name', 'schema_version'))
+        ->execute()
+        ->fetchAssoc();
+      // drush_print_r($status);
+
+      drush_log('Updated schema', 'ok');
+      drush_log($status['name'] . ' - ' . $status['schema_version'], 'ok');
+    }
 }
 
